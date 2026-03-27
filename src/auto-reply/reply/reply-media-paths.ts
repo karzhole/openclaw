@@ -3,7 +3,7 @@ import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolvePathFromInput } from "../../agents/path-policy.js";
 import { assertMediaNotDataUrl, resolveSandboxedMediaSource } from "../../agents/sandbox-paths.js";
 import { ensureSandboxWorkspaceForSession } from "../../agents/sandbox.js";
-import { resolveEffectiveToolFsWorkspaceOnly } from "../../agents/tool-fs-policy.js";
+import { resolveEffectiveToolFsWorkspaceOnly, resolveToolFsConfig } from "../../agents/tool-fs-policy.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { ReplyPayload } from "../types.js";
 
@@ -39,10 +39,8 @@ export function createReplyMediaPathNormalizer(params: {
   const agentId = params.sessionKey
     ? resolveSessionAgentId({ sessionKey: params.sessionKey, config: params.cfg })
     : undefined;
-  const workspaceOnly = resolveEffectiveToolFsWorkspaceOnly({
-    cfg: params.cfg,
-    agentId,
-  });
+  const fsConfig = resolveToolFsConfig({ cfg: params.cfg, agentId });
+  const workspaceOnly = fsConfig.workspaceOnly === true || fsConfig.cwdOnly === true;
   let sandboxRootPromise: Promise<string | undefined> | undefined;
 
   const resolveSandboxRoot = async (): Promise<string | undefined> => {

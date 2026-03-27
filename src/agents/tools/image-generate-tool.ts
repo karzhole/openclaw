@@ -344,6 +344,8 @@ async function loadReferenceImages(params: {
   maxBytes?: number;
   workspaceDir?: string;
   sandboxConfig: { root: string; bridge: SandboxFsBridge; workspaceOnly: boolean } | null;
+  /** True when cwdOnly or workspaceOnly restricts fs access (used outside sandbox). */
+  fsRestricted?: boolean;
 }): Promise<
   Array<{
     sourceImage: ImageGenerationSourceImage;
@@ -405,7 +407,7 @@ async function loadReferenceImages(params: {
     const localRoots = resolveMediaToolLocalRoots(
       params.workspaceDir,
       {
-        workspaceOnly: params.sandboxConfig?.workspaceOnly === true,
+        workspaceOnly: params.sandboxConfig?.workspaceOnly === true || params.fsRestricted === true,
       },
       resolvedPath ? [resolvedPath] : undefined,
     );
@@ -484,7 +486,7 @@ export function createImageGenerateTool(options?: {
       ? {
           root: options.sandbox.root.trim(),
           bridge: options.sandbox.bridge,
-          workspaceOnly: options.fsPolicy?.workspaceOnly === true,
+          workspaceOnly: options.fsPolicy?.workspaceOnly === true || options.fsPolicy?.cwdOnly === true,
         }
       : null;
 
@@ -556,6 +558,7 @@ export function createImageGenerateTool(options?: {
         imageInputs,
         workspaceDir: options?.workspaceDir,
         sandboxConfig,
+        fsRestricted: options?.fsPolicy?.workspaceOnly === true || options?.fsPolicy?.cwdOnly === true,
       });
       const inputImages = loadedReferenceImages.map((entry) => entry.sourceImage);
       const resolution =

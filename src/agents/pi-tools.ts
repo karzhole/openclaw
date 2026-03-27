@@ -393,7 +393,7 @@ export function createOpenClawCodingTools(options?: {
           imageSanitization,
         });
         return [
-          workspaceOnly
+          workspaceOnly || cwdOnly
             ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
                 containerWorkdir: sandbox.containerWorkdir,
               })
@@ -509,7 +509,7 @@ export function createOpenClawCodingTools(options?: {
     ...(sandboxRoot
       ? allowWorkspaceWrites
         ? [
-            workspaceOnly
+            workspaceOnly || cwdOnly
               ? wrapToolWorkspaceRootGuardWithOptions(
                   createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
                   sandboxRoot,
@@ -518,7 +518,7 @@ export function createOpenClawCodingTools(options?: {
                   },
                 )
               : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-            workspaceOnly
+            workspaceOnly || cwdOnly
               ? wrapToolWorkspaceRootGuardWithOptions(
                   createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
                   sandboxRoot,
@@ -550,7 +550,7 @@ export function createOpenClawCodingTools(options?: {
       sandboxRoot,
       sandboxFsBridge,
       fsPolicy,
-      workspaceDir: workspaceRoot,
+      workspaceDir: effectiveToolRoot,
       spawnWorkspaceDir: options?.spawnWorkspaceDir
         ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
         : undefined,

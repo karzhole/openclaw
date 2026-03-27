@@ -3,6 +3,7 @@ import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import {
   resolveEffectiveToolFsRootExpansionAllowed,
   resolveEffectiveToolFsWorkspaceOnly,
+  resolveToolFsConfig,
 } from "../agents/tool-fs-policy.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
@@ -112,7 +113,8 @@ export function getAgentScopedMediaLocalRootsForSources(params: {
   mediaSources?: readonly string[];
 }): readonly string[] {
   const roots = getAgentScopedMediaLocalRoots(params.cfg, params.agentId);
-  if (resolveEffectiveToolFsWorkspaceOnly({ cfg: params.cfg, agentId: params.agentId })) {
+  const fsConfig = resolveToolFsConfig({ cfg: params.cfg, agentId: params.agentId });
+  if (fsConfig.workspaceOnly === true || fsConfig.cwdOnly === true) {
     return roots;
   }
   if (!resolveEffectiveToolFsRootExpansionAllowed({ cfg: params.cfg, agentId: params.agentId })) {

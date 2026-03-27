@@ -409,7 +409,7 @@ export function createPdfTool(options?: {
           ? {
               root: options.sandbox.root.trim(),
               bridge: options.sandbox.bridge,
-              workspaceOnly: options.fsPolicy?.workspaceOnly === true,
+              workspaceOnly: options.fsPolicy?.workspaceOnly === true || options.fsPolicy?.cwdOnly === true,
             }
           : null;
 
@@ -470,7 +470,7 @@ export function createPdfTool(options?: {
         const localRoots = resolveMediaToolLocalRoots(
           options?.workspaceDir,
           {
-            workspaceOnly: options?.fsPolicy?.workspaceOnly === true,
+            workspaceOnly: options?.fsPolicy?.workspaceOnly === true || options?.fsPolicy?.cwdOnly === true,
           },
           [resolvedPathInfo.resolved],
         );

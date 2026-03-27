@@ -562,7 +562,7 @@ describe("resolveAgentCwd", () => {
   });
 
   it("resolves an absolute cwd path", () => {
-    const cwdPath = path.join(path.sep, "home", "user", "projects", "repo-1");
+    const cwdPath = path.resolve(path.sep, "home", "user", "projects", "repo-1");
     const cfg: OpenClawConfig = {
       agents: {
         list: [{ id: "worker", cwd: cwdPath }],
