@@ -7,7 +7,7 @@ import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
 import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
-import { resolveAgentConfig } from "./agent-scope.js";
+import { resolveAgentConfig, resolveAgentCwd } from "./agent-scope.js";
 import { createApplyPatchTool } from "./apply-patch.js";
 import {
   createExecTool,
@@ -349,16 +349,26 @@ export function createOpenClawCodingTools(options?: {
   const fsConfig = resolveToolFsConfig({ cfg: options?.config, agentId });
   const fsPolicy = createToolFsPolicy({
     workspaceOnly: isMemoryFlushRun || fsConfig.workspaceOnly,
+    cwdOnly: fsConfig.cwdOnly,
   });
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
   const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
+  // Resolve agent cwd: when configured, tool operations default to this path.
+  const agentCwd =
+    options?.config && agentId ? resolveAgentCwd(options.config, agentId) : undefined;
+  // effectiveToolRoot: use agent cwd when configured, otherwise workspace.
+  const effectiveToolRoot = agentCwd ?? workspaceRoot;
   const workspaceOnly = fsPolicy.workspaceOnly;
+  const cwdOnly = fsPolicy.cwdOnly;
+  // The guard root for cwdOnly: restrict to cwd when available, otherwise workspace.
+  const cwdGuardRoot = cwdOnly ? effectiveToolRoot : undefined;
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
   // (tools.fs.workspaceOnly is a separate umbrella flag for read/write/edit/apply_patch.)
-  const applyPatchWorkspaceOnly = workspaceOnly || applyPatchConfig?.workspaceOnly !== false;
+  const applyPatchWorkspaceOnly =
+    workspaceOnly || cwdOnly || applyPatchConfig?.workspaceOnly !== false;
   const applyPatchEnabled =
     applyPatchConfig?.enabled !== false &&
     isOpenAIProvider(options?.modelProvider) &&
@@ -390,12 +400,18 @@ export function createOpenClawCodingTools(options?: {
             : sandboxed,
         ];
       }
-      const freshReadTool = createReadTool(workspaceRoot);
+      const freshReadTool = createReadTool(effectiveToolRoot);
       const wrapped = createOpenClawReadTool(freshReadTool, {
         modelContextWindowTokens: options?.modelContextWindowTokens,
         imageSanitization,
       });
-      return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
+      if (workspaceOnly) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
+      }
+      if (cwdGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
+      }
+      return [wrapped];
     }
     if (tool.name === "bash" || tool.name === execToolName) {
       return [];
@@ -404,15 +420,33 @@ export function createOpenClawCodingTools(options?: {
       if (sandboxRoot) {
         return [];
       }
-      const wrapped = createHostWorkspaceWriteTool(workspaceRoot, { workspaceOnly });
-      return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
+      const fsRestricted = workspaceOnly || cwdOnly;
+      const wrapped = createHostWorkspaceWriteTool(effectiveToolRoot, {
+        workspaceOnly: fsRestricted,
+      });
+      if (workspaceOnly) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
+      }
+      if (cwdGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
+      }
+      return [wrapped];
     }
     if (tool.name === "edit") {
       if (sandboxRoot) {
         return [];
       }
-      const wrapped = createHostWorkspaceEditTool(workspaceRoot, { workspaceOnly });
-      return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
+      const fsRestricted = workspaceOnly || cwdOnly;
+      const wrapped = createHostWorkspaceEditTool(effectiveToolRoot, {
+        workspaceOnly: fsRestricted,
+      });
+      if (workspaceOnly) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
+      }
+      if (cwdGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
+      }
+      return [wrapped];
     }
     return [tool];
   });
@@ -429,7 +463,7 @@ export function createOpenClawCodingTools(options?: {
     safeBinTrustedDirs: options?.exec?.safeBinTrustedDirs ?? execConfig.safeBinTrustedDirs,
     safeBinProfiles: options?.exec?.safeBinProfiles ?? execConfig.safeBinProfiles,
     agentId,
-    cwd: workspaceRoot,
+    cwd: effectiveToolRoot,
     allowBackground,
     scopeKey,
     sessionKey: options?.sessionKey,
@@ -463,7 +497,7 @@ export function createOpenClawCodingTools(options?: {
     !applyPatchEnabled || (sandboxRoot && !allowWorkspaceWrites)
       ? null
       : createApplyPatchTool({
-          cwd: sandboxRoot ?? workspaceRoot,
+          cwd: sandboxRoot ?? effectiveToolRoot,
           sandbox:
             sandboxRoot && allowWorkspaceWrites
               ? { root: sandboxRoot, bridge: sandboxFsBridge! }

@@ -63,6 +63,12 @@ export type AgentConfig = {
   default?: boolean;
   name?: string;
   workspace?: string;
+  /**
+   * Optional per-agent working directory for tool operations.
+   * When set, filesystem and exec tools default to this path instead of `workspace`.
+   * Bootstrap files (AGENTS.md, SOUL.md) still load from `workspace`.
+   */
+  cwd?: string;
   agentDir?: string;
   model?: AgentModelConfig;
   /** Optional per-agent default thinking level (overrides agents.defaults.thinkingDefault). */

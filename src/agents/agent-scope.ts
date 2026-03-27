@@ -34,6 +34,7 @@ type AgentEntry = NonNullable<NonNullable<OpenClawConfig["agents"]>["list"]>[num
 type ResolvedAgentConfig = {
   name?: string;
   workspace?: string;
+  cwd?: string;
   agentDir?: string;
   model?: AgentEntry["model"];
   thinkingDefault?: AgentEntry["thinkingDefault"];
@@ -136,6 +137,7 @@ export function resolveAgentConfig(
   return {
     name: typeof entry.name === "string" ? entry.name : undefined,
     workspace: typeof entry.workspace === "string" ? entry.workspace : undefined,
+    cwd: typeof entry.cwd === "string" ? entry.cwd : undefined,
     agentDir: typeof entry.agentDir === "string" ? entry.agentDir : undefined,
     model:
       typeof entry.model === "string" || (entry.model && typeof entry.model === "object")
@@ -281,6 +283,21 @@ export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
   }
   const stateDir = resolveStateDir(process.env);
   return stripNullBytes(path.join(stateDir, `workspace-${id}`));
+}
+
+/**
+ * Resolve the effective tool working directory for an agent.
+ *
+ * When the agent has a `cwd` configured, returns the resolved path.
+ * Otherwise returns `undefined` so callers fall back to the workspace directory.
+ */
+export function resolveAgentCwd(cfg: OpenClawConfig, agentId: string): string | undefined {
+  const id = normalizeAgentId(agentId);
+  const configured = resolveAgentConfig(cfg, id)?.cwd?.trim();
+  if (!configured) {
+    return undefined;
+  }
+  return stripNullBytes(resolveUserPath(configured));
 }
 
 function normalizePathForComparison(input: string): string {

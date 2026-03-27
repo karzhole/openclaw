@@ -14,6 +14,7 @@ import {
   resolveAgentModelFallbacksOverride,
   resolveAgentModelPrimary,
   resolveRunModelFallbacksOverride,
+  resolveAgentCwd,
   resolveAgentWorkspaceDir,
   resolveAgentIdByWorkspacePath,
   resolveAgentIdsByWorkspacePath,
@@ -58,6 +59,7 @@ describe("resolveAgentConfig", () => {
     expect(result).toEqual({
       name: "Main Agent",
       workspace: "~/openclaw",
+      cwd: undefined,
       agentDir: "~/.openclaw/agents/main",
       model: "anthropic/claude-sonnet-4-6",
       identity: undefined,
@@ -519,5 +521,93 @@ describe("resolveAgentIdsByWorkspacePath", () => {
       "ops",
       "main",
     ]);
+  });
+});
+
+describe("resolveAgentCwd", () => {
+  it("returns undefined when no cwd is configured", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main", workspace: "~/openclaw" }],
+      },
+    };
+    expect(resolveAgentCwd(cfg, "main")).toBeUndefined();
+  });
+
+  it("returns undefined when agent does not exist", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main" }],
+      },
+    };
+    expect(resolveAgentCwd(cfg, "nonexistent")).toBeUndefined();
+  });
+
+  it("returns undefined for empty string cwd", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main", cwd: "" }],
+      },
+    };
+    expect(resolveAgentCwd(cfg, "main")).toBeUndefined();
+  });
+
+  it("returns undefined for whitespace-only cwd", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "main", cwd: "   " }],
+      },
+    };
+    expect(resolveAgentCwd(cfg, "main")).toBeUndefined();
+  });
+
+  it("resolves an absolute cwd path", () => {
+    const cwdPath = path.join(path.sep, "home", "user", "projects", "repo-1");
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", cwd: cwdPath }],
+      },
+    };
+    expect(resolveAgentCwd(cfg, "worker")).toBe(cwdPath);
+  });
+
+  it("expands tilde in cwd", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", cwd: "~/projects/repo-1" }],
+      },
+    };
+    const result = resolveAgentCwd(cfg, "worker");
+    expect(result).toBeDefined();
+    expect(result).toContain("projects");
+    expect(result).toContain("repo-1");
+    expect(result).not.toContain("~");
+  });
+
+  it("strips null bytes from cwd", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", cwd: "/home/user/project\0s" }],
+      },
+    };
+    const result = resolveAgentCwd(cfg, "worker");
+    expect(result).not.toContain("\0");
+  });
+
+  it("resolveAgentConfig includes cwd in result", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [
+          {
+            id: "worker",
+            workspace: "~/openclaw",
+            cwd: "/home/user/projects/repo-1",
+          },
+        ],
+      },
+    };
+    const result = resolveAgentConfig(cfg, "worker");
+    expect(result?.cwd).toBe("/home/user/projects/repo-1");
+    expect(result?.workspace).toBe("~/openclaw");
   });
 });

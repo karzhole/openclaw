@@ -448,6 +448,7 @@ const ToolExecSchema = z.object(ToolExecBaseShape).strict().optional();
 const ToolFsSchema = z
   .object({
     workspaceOnly: z.boolean().optional(),
+    cwdOnly: z.boolean().optional(),
   })
   .strict()
   .optional();
@@ -748,6 +749,7 @@ export const AgentEntrySchema = z
     default: z.boolean().optional(),
     name: z.string().optional(),
     workspace: z.string().optional(),
+    cwd: z.string().optional(),
     agentDir: z.string().optional(),
     model: AgentModelSchema.optional(),
     thinkingDefault: z

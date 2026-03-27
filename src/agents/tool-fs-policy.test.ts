@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
+  createToolFsPolicy,
   resolveEffectiveToolFsRootExpansionAllowed,
   resolveEffectiveToolFsWorkspaceOnly,
+  resolveToolFsConfig,
 } from "./tool-fs-policy.js";
 
 describe("resolveEffectiveToolFsWorkspaceOnly", () => {
@@ -159,5 +161,76 @@ describe("resolveEffectiveToolFsRootExpansionAllowed", () => {
     };
 
     expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "messenger" })).toBe(false);
+  });
+
+  it("disables root expansion when cwdOnly is set", () => {
+    const cfg: OpenClawConfig = {
+      tools: {
+        fs: { cwdOnly: true },
+      },
+    };
+    expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "main" })).toBe(false);
+  });
+});
+
+describe("resolveToolFsConfig – cwdOnly", () => {
+  it("returns undefined for cwdOnly when not configured", () => {
+    expect(resolveToolFsConfig({ cfg: {}, agentId: "main" }).cwdOnly).toBeUndefined();
+  });
+
+  it("uses global tools.fs.cwdOnly when no agent override exists", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { cwdOnly: true } },
+    };
+    expect(resolveToolFsConfig({ cfg, agentId: "main" }).cwdOnly).toBe(true);
+  });
+
+  it("prefers agent-specific tools.fs.cwdOnly over global setting", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { cwdOnly: true } },
+      agents: {
+        list: [
+          {
+            id: "main",
+            tools: { fs: { cwdOnly: false } },
+          },
+        ],
+      },
+    };
+    expect(resolveToolFsConfig({ cfg, agentId: "main" }).cwdOnly).toBe(false);
+  });
+
+  it("supports agent-specific cwdOnly when global is off", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { cwdOnly: false } },
+      agents: {
+        list: [
+          {
+            id: "worker",
+            tools: { fs: { cwdOnly: true } },
+          },
+        ],
+      },
+    };
+    expect(resolveToolFsConfig({ cfg, agentId: "worker" }).cwdOnly).toBe(true);
+  });
+});
+
+describe("createToolFsPolicy – cwdOnly", () => {
+  it("defaults cwdOnly to false when not provided", () => {
+    const policy = createToolFsPolicy({});
+    expect(policy.cwdOnly).toBe(false);
+    expect(policy.workspaceOnly).toBe(false);
+  });
+
+  it("sets cwdOnly when explicitly provided", () => {
+    const policy = createToolFsPolicy({ cwdOnly: true });
+    expect(policy.cwdOnly).toBe(true);
+  });
+
+  it("allows both workspaceOnly and cwdOnly to be set independently", () => {
+    const policy = createToolFsPolicy({ workspaceOnly: true, cwdOnly: true });
+    expect(policy.workspaceOnly).toBe(true);
+    expect(policy.cwdOnly).toBe(true);
   });
 });
