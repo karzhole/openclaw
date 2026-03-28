@@ -6,22 +6,22 @@ import { mergeAlsoAllowPolicy, resolveToolProfilePolicy } from "./tool-policy.js
 
 export type ToolFsPolicy = {
   workspaceOnly: boolean;
-  cwdOnly: boolean;
+  workdirWriteOnly: boolean;
 };
 
 export function createToolFsPolicy(params: {
   workspaceOnly?: boolean;
-  cwdOnly?: boolean;
+  workdirWriteOnly?: boolean;
 }): ToolFsPolicy {
   return {
     workspaceOnly: params.workspaceOnly === true,
-    cwdOnly: params.cwdOnly === true,
+    workdirWriteOnly: params.workdirWriteOnly === true,
   };
 }
 
 export function resolveToolFsConfig(params: { cfg?: OpenClawConfig; agentId?: string }): {
   workspaceOnly?: boolean;
-  cwdOnly?: boolean;
+  workdirWriteOnly?: boolean;
 } {
   const cfg = params.cfg;
   const globalFs = cfg?.tools?.fs;
@@ -29,7 +29,7 @@ export function resolveToolFsConfig(params: { cfg?: OpenClawConfig; agentId?: st
     cfg && params.agentId ? resolveAgentConfig(cfg, params.agentId)?.tools?.fs : undefined;
   return {
     workspaceOnly: agentFs?.workspaceOnly ?? globalFs?.workspaceOnly,
-    cwdOnly: agentFs?.cwdOnly ?? globalFs?.cwdOnly,
+    workdirWriteOnly: agentFs?.workdirWriteOnly ?? globalFs?.workdirWriteOnly,
   };
 }
 
@@ -54,7 +54,8 @@ export function resolveEffectiveToolFsRootExpansionAllowed(params: {
   const profileAlsoAllow = new Set(agentTools?.alsoAllow ?? globalTools?.alsoAllow ?? []);
   const fsConfig = resolveToolFsConfig(params);
   const hasExplicitFsConfig = agentTools?.fs !== undefined || globalTools?.fs !== undefined;
-  if (fsConfig.workspaceOnly === true || fsConfig.cwdOnly === true) {
+  // workdirWriteOnly only restricts writes — root expansion is a read-path concern.
+  if (fsConfig.workspaceOnly === true) {
     return false;
   }
   if (hasExplicitFsConfig) {

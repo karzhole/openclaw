@@ -286,12 +286,13 @@ export type FsToolsConfig = {
    */
   workspaceOnly?: boolean;
   /**
-   * Restrict filesystem tools (read/write/edit/apply_patch) to the agent cwd directory.
-   * When the agent has a `cwd` configured, this restricts tools to that directory
-   * instead of the workspace. When no `cwd` is configured, falls back to workspace behavior.
+   * Restrict write/edit/exec/apply_patch tools to the agent `workdir` directory
+   * while keeping read access to the full `workspace`.
+   * Requires `workdir` to be set on the agent. When no `workdir` is configured,
+   * falls back to workspace-level restriction for writes.
    * Default: false.
    */
-  cwdOnly?: boolean;
+  workdirWriteOnly?: boolean;
 };
 
 export type AgentToolsConfig = {

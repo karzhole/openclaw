@@ -34,7 +34,7 @@ type AgentEntry = NonNullable<NonNullable<OpenClawConfig["agents"]>["list"]>[num
 type ResolvedAgentConfig = {
   name?: string;
   workspace?: string;
-  cwd?: string;
+  workdir?: string;
   agentDir?: string;
   model?: AgentEntry["model"];
   thinkingDefault?: AgentEntry["thinkingDefault"];
@@ -137,7 +137,7 @@ export function resolveAgentConfig(
   return {
     name: typeof entry.name === "string" ? entry.name : undefined,
     workspace: typeof entry.workspace === "string" ? entry.workspace : undefined,
-    cwd: typeof entry.cwd === "string" ? entry.cwd : undefined,
+    workdir: typeof entry.workdir === "string" ? entry.workdir : undefined,
     agentDir: typeof entry.agentDir === "string" ? entry.agentDir : undefined,
     model:
       typeof entry.model === "string" || (entry.model && typeof entry.model === "object")
@@ -288,16 +288,27 @@ export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
 /**
  * Resolve the effective tool working directory for an agent.
  *
- * When the agent has a `cwd` configured, returns the resolved path.
- * Otherwise returns `undefined` so callers fall back to the workspace directory.
+ * When the agent has a `workdir` configured, returns the resolved path.
+ * The workdir must be a subdirectory of the agent's workspace; paths that
+ * escape the workspace boundary are silently ignored (returns `undefined`).
  */
-export function resolveAgentCwd(cfg: OpenClawConfig, agentId: string): string | undefined {
+export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): string | undefined {
   const id = normalizeAgentId(agentId);
-  const configured = resolveAgentConfig(cfg, id)?.cwd?.trim();
+  const configured = resolveAgentConfig(cfg, id)?.workdir?.trim();
   if (!configured) {
     return undefined;
   }
-  return stripNullBytes(resolveUserPath(configured));
+  const resolved = stripNullBytes(resolveUserPath(configured));
+  // Validate that workdir is within workspace.
+  const workspace = resolveAgentWorkspaceDir(cfg, id);
+  const relative = path.relative(workspace, resolved);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    getLog().warn(
+      `Agent "${id}" workdir "${configured}" is outside workspace "${workspace}"; ignoring.`,
+    );
+    return undefined;
+  }
+  return resolved;
 }
 
 function normalizePathForComparison(input: string): string {

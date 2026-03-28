@@ -163,74 +163,75 @@ describe("resolveEffectiveToolFsRootExpansionAllowed", () => {
     expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "messenger" })).toBe(false);
   });
 
-  it("disables root expansion when cwdOnly is set", () => {
+  it("does not disable root expansion when only workdirWriteOnly is set", () => {
     const cfg: OpenClawConfig = {
       tools: {
-        fs: { cwdOnly: true },
+        fs: { workdirWriteOnly: true },
       },
     };
-    expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "main" })).toBe(false);
+    // workdirWriteOnly restricts writes only — root expansion (a read concern) stays allowed.
+    expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "main" })).toBe(true);
   });
 });
 
-describe("resolveToolFsConfig – cwdOnly", () => {
-  it("returns undefined for cwdOnly when not configured", () => {
-    expect(resolveToolFsConfig({ cfg: {}, agentId: "main" }).cwdOnly).toBeUndefined();
+describe("resolveToolFsConfig – workdirWriteOnly", () => {
+  it("returns undefined for workdirWriteOnly when not configured", () => {
+    expect(resolveToolFsConfig({ cfg: {}, agentId: "main" }).workdirWriteOnly).toBeUndefined();
   });
 
-  it("uses global tools.fs.cwdOnly when no agent override exists", () => {
+  it("uses global tools.fs.workdirWriteOnly when no agent override exists", () => {
     const cfg: OpenClawConfig = {
-      tools: { fs: { cwdOnly: true } },
+      tools: { fs: { workdirWriteOnly: true } },
     };
-    expect(resolveToolFsConfig({ cfg, agentId: "main" }).cwdOnly).toBe(true);
+    expect(resolveToolFsConfig({ cfg, agentId: "main" }).workdirWriteOnly).toBe(true);
   });
 
-  it("prefers agent-specific tools.fs.cwdOnly over global setting", () => {
+  it("prefers agent-specific tools.fs.workdirWriteOnly over global setting", () => {
     const cfg: OpenClawConfig = {
-      tools: { fs: { cwdOnly: true } },
+      tools: { fs: { workdirWriteOnly: true } },
       agents: {
         list: [
           {
             id: "main",
-            tools: { fs: { cwdOnly: false } },
+            tools: { fs: { workdirWriteOnly: false } },
           },
         ],
       },
     };
-    expect(resolveToolFsConfig({ cfg, agentId: "main" }).cwdOnly).toBe(false);
+    expect(resolveToolFsConfig({ cfg, agentId: "main" }).workdirWriteOnly).toBe(false);
   });
 
-  it("supports agent-specific cwdOnly when global is off", () => {
+  it("supports agent-specific workdirWriteOnly when global is off", () => {
     const cfg: OpenClawConfig = {
-      tools: { fs: { cwdOnly: false } },
+      tools: { fs: { workdirWriteOnly: false } },
       agents: {
         list: [
           {
             id: "worker",
-            tools: { fs: { cwdOnly: true } },
+            tools: { fs: { workdirWriteOnly: true } },
           },
         ],
       },
     };
-    expect(resolveToolFsConfig({ cfg, agentId: "worker" }).cwdOnly).toBe(true);
+    expect(resolveToolFsConfig({ cfg, agentId: "worker" }).workdirWriteOnly).toBe(true);
   });
 });
 
-describe("createToolFsPolicy – cwdOnly", () => {
-  it("defaults cwdOnly to false when not provided", () => {
+describe("createToolFsPolicy – workdirWriteOnly", () => {
+  it("defaults workdirWriteOnly to false when not provided", () => {
     const policy = createToolFsPolicy({});
-    expect(policy.cwdOnly).toBe(false);
+    expect(policy.workdirWriteOnly).toBe(false);
     expect(policy.workspaceOnly).toBe(false);
   });
 
-  it("sets cwdOnly when explicitly provided", () => {
-    const policy = createToolFsPolicy({ cwdOnly: true });
-    expect(policy.cwdOnly).toBe(true);
+  it("sets workdirWriteOnly when explicitly provided", () => {
+    const policy = createToolFsPolicy({ workdirWriteOnly: true });
+    expect(policy.workdirWriteOnly).toBe(true);
   });
 
-  it("allows both workspaceOnly and cwdOnly to be set independently", () => {
-    const policy = createToolFsPolicy({ workspaceOnly: true, cwdOnly: true });
+  it("allows both workspaceOnly and workdirWriteOnly to be set independently", () => {
+    const policy = createToolFsPolicy({ workspaceOnly: true, workdirWriteOnly: true });
     expect(policy.workspaceOnly).toBe(true);
-    expect(policy.cwdOnly).toBe(true);
+    expect(policy.workdirWriteOnly).toBe(true);
   });
 });

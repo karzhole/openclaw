@@ -1,3 +1,4 @@
+import path from "node:path";
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelCompatConfig } from "../config/types.models.js";
@@ -7,7 +8,7 @@ import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
 import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
-import { resolveAgentConfig, resolveAgentCwd } from "./agent-scope.js";
+import { resolveAgentConfig, resolveAgentWorkdir } from "./agent-scope.js";
 import { createApplyPatchTool } from "./apply-patch.js";
 import {
   createExecTool,
@@ -349,26 +350,39 @@ export function createOpenClawCodingTools(options?: {
   const fsConfig = resolveToolFsConfig({ cfg: options?.config, agentId });
   const fsPolicy = createToolFsPolicy({
     workspaceOnly: isMemoryFlushRun || fsConfig.workspaceOnly,
-    cwdOnly: fsConfig.cwdOnly,
+    workdirWriteOnly: fsConfig.workdirWriteOnly,
   });
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
   const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
-  // Resolve agent cwd: when configured, tool operations default to this path.
-  const agentCwd =
-    options?.config && agentId ? resolveAgentCwd(options.config, agentId) : undefined;
-  // effectiveToolRoot: use agent cwd when configured, otherwise workspace.
-  const effectiveToolRoot = agentCwd ?? workspaceRoot;
+  // Resolve agent workdir: when configured, write/edit/exec tools default to this path.
+  // resolveAgentWorkdir already validates workdir is within workspace.
+  const agentWorkdir =
+    options?.config && agentId ? resolveAgentWorkdir(options.config, agentId) : undefined;
+  // effectiveWriteRoot: use workdir for write/edit/exec, workspaceRoot for reads.
+  const effectiveWriteRoot = agentWorkdir ?? workspaceRoot;
   const workspaceOnly = fsPolicy.workspaceOnly;
-  const cwdOnly = fsPolicy.cwdOnly;
-  // The guard root for cwdOnly: restrict to cwd when available, otherwise workspace.
-  const cwdGuardRoot = cwdOnly ? effectiveToolRoot : undefined;
+  const workdirWriteOnly = fsPolicy.workdirWriteOnly;
+  // Write guard root: restrict writes to workdir when workdirWriteOnly is set.
+  const workdirGuardRoot = workdirWriteOnly ? effectiveWriteRoot : undefined;
+  // Compute sandbox-mapped workdir: map the host-side workdir to the equivalent
+  // subdirectory inside the sandbox so write guards restrict to the workdir boundary.
+  const sandboxWorkdirRoot = (() => {
+    if (!sandboxRoot || !workdirWriteOnly || !agentWorkdir) {
+      return undefined;
+    }
+    const relative = path.relative(workspaceRoot, agentWorkdir);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    return path.join(sandboxRoot, relative);
+  })();
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
   // (tools.fs.workspaceOnly is a separate umbrella flag for read/write/edit/apply_patch.)
   const applyPatchWorkspaceOnly =
-    workspaceOnly || cwdOnly || applyPatchConfig?.workspaceOnly !== false;
+    workspaceOnly || workdirWriteOnly || applyPatchConfig?.workspaceOnly !== false;
   const applyPatchEnabled =
     applyPatchConfig?.enabled !== false &&
     isOpenAIProvider(options?.modelProvider) &&
@@ -392,24 +406,23 @@ export function createOpenClawCodingTools(options?: {
           modelContextWindowTokens: options?.modelContextWindowTokens,
           imageSanitization,
         });
+        // Read tool: workdirWriteOnly does NOT restrict reads — only workspaceOnly does.
         return [
-          workspaceOnly || cwdOnly
+          workspaceOnly
             ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
                 containerWorkdir: sandbox.containerWorkdir,
               })
             : sandboxed,
         ];
       }
-      const freshReadTool = createReadTool(effectiveToolRoot);
+      const freshReadTool = createReadTool(workspaceRoot);
       const wrapped = createOpenClawReadTool(freshReadTool, {
         modelContextWindowTokens: options?.modelContextWindowTokens,
         imageSanitization,
       });
+      // Read tool: workdirWriteOnly does NOT restrict reads — only workspaceOnly does.
       if (workspaceOnly) {
         return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
-      }
-      if (cwdGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
       }
       return [wrapped];
     }
@@ -420,15 +433,15 @@ export function createOpenClawCodingTools(options?: {
       if (sandboxRoot) {
         return [];
       }
-      const fsRestricted = workspaceOnly || cwdOnly;
-      const wrapped = createHostWorkspaceWriteTool(effectiveToolRoot, {
+      const fsRestricted = workspaceOnly || workdirWriteOnly;
+      const wrapped = createHostWorkspaceWriteTool(effectiveWriteRoot, {
         workspaceOnly: fsRestricted,
       });
       if (workspaceOnly) {
         return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
       }
-      if (cwdGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
+      if (workdirGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
       }
       return [wrapped];
     }
@@ -436,15 +449,15 @@ export function createOpenClawCodingTools(options?: {
       if (sandboxRoot) {
         return [];
       }
-      const fsRestricted = workspaceOnly || cwdOnly;
-      const wrapped = createHostWorkspaceEditTool(effectiveToolRoot, {
+      const fsRestricted = workspaceOnly || workdirWriteOnly;
+      const wrapped = createHostWorkspaceEditTool(effectiveWriteRoot, {
         workspaceOnly: fsRestricted,
       });
       if (workspaceOnly) {
         return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
       }
-      if (cwdGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, cwdGuardRoot)];
+      if (workdirGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
       }
       return [wrapped];
     }
@@ -463,7 +476,7 @@ export function createOpenClawCodingTools(options?: {
     safeBinTrustedDirs: options?.exec?.safeBinTrustedDirs ?? execConfig.safeBinTrustedDirs,
     safeBinProfiles: options?.exec?.safeBinProfiles ?? execConfig.safeBinProfiles,
     agentId,
-    cwd: effectiveToolRoot,
+    cwd: effectiveWriteRoot,
     allowBackground,
     scopeKey,
     sessionKey: options?.sessionKey,
@@ -497,7 +510,7 @@ export function createOpenClawCodingTools(options?: {
     !applyPatchEnabled || (sandboxRoot && !allowWorkspaceWrites)
       ? null
       : createApplyPatchTool({
-          cwd: sandboxRoot ?? effectiveToolRoot,
+          cwd: sandboxWorkdirRoot ?? sandboxRoot ?? effectiveWriteRoot,
           sandbox:
             sandboxRoot && allowWorkspaceWrites
               ? { root: sandboxRoot, bridge: sandboxFsBridge! }
@@ -508,26 +521,30 @@ export function createOpenClawCodingTools(options?: {
     ...base,
     ...(sandboxRoot
       ? allowWorkspaceWrites
-        ? [
-            workspaceOnly || cwdOnly
-              ? wrapToolWorkspaceRootGuardWithOptions(
-                  createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                  sandboxRoot,
-                  {
-                    containerWorkdir: sandbox.containerWorkdir,
-                  },
-                )
-              : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-            workspaceOnly || cwdOnly
-              ? wrapToolWorkspaceRootGuardWithOptions(
-                  createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                  sandboxRoot,
-                  {
-                    containerWorkdir: sandbox.containerWorkdir,
-                  },
-                )
-              : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-          ]
+        ? (() => {
+            // Write/edit tools: restrict to workdir subdirectory when workdirWriteOnly.
+            const sandboxWriteGuardRoot = sandboxWorkdirRoot ?? sandboxRoot;
+            return [
+              workspaceOnly || workdirWriteOnly
+                ? wrapToolWorkspaceRootGuardWithOptions(
+                    createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+                    sandboxWriteGuardRoot,
+                    {
+                      containerWorkdir: sandbox.containerWorkdir,
+                    },
+                  )
+                : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+              workspaceOnly || workdirWriteOnly
+                ? wrapToolWorkspaceRootGuardWithOptions(
+                    createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+                    sandboxWriteGuardRoot,
+                    {
+                      containerWorkdir: sandbox.containerWorkdir,
+                    },
+                  )
+                : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+            ];
+          })()
         : []
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
@@ -550,7 +567,7 @@ export function createOpenClawCodingTools(options?: {
       sandboxRoot,
       sandboxFsBridge,
       fsPolicy,
-      workspaceDir: effectiveToolRoot,
+      workspaceDir: workspaceRoot,
       spawnWorkspaceDir: options?.spawnWorkspaceDir
         ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
         : undefined,

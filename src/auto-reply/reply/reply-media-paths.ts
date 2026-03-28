@@ -40,7 +40,8 @@ export function createReplyMediaPathNormalizer(params: {
     ? resolveSessionAgentId({ sessionKey: params.sessionKey, config: params.cfg })
     : undefined;
   const fsConfig = resolveToolFsConfig({ cfg: params.cfg, agentId });
-  const workspaceOnly = fsConfig.workspaceOnly === true || fsConfig.cwdOnly === true;
+  // workdirWriteOnly only restricts writes — media path resolution is a read operation.
+  const workspaceOnly = fsConfig.workspaceOnly === true;
   let sandboxRootPromise: Promise<string | undefined> | undefined;
 
   const resolveSandboxRoot = async (): Promise<string | undefined> => {

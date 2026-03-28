@@ -403,7 +403,7 @@ describe("createPdfTool", () => {
             config: cfg,
             agentDir,
             workspaceDir,
-            fsPolicy: { workspaceOnly: true, cwdOnly: false },
+            fsPolicy: { workspaceOnly: true, workdirWriteOnly: false },
           }),
         );
 

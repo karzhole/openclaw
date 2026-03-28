@@ -878,7 +878,7 @@ describe("image tool implicit imageModel config", () => {
           config: cfg,
           agentDir,
           workspaceDir,
-          fsPolicy: { workspaceOnly: true, cwdOnly: false },
+          fsPolicy: { workspaceOnly: true, workdirWriteOnly: false },
         });
 
         // File inside workspace is allowed.
@@ -911,7 +911,7 @@ describe("image tool implicit imageModel config", () => {
         const tool = createRequiredImageTool({
           config: cfg,
           agentDir,
-          fsPolicy: { workspaceOnly: false, cwdOnly: false },
+          fsPolicy: { workspaceOnly: false, workdirWriteOnly: false },
         });
 
         await expectImageToolExecOk(tool, outsideImage);

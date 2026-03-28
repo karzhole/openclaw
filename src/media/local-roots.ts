@@ -114,7 +114,8 @@ export function getAgentScopedMediaLocalRootsForSources(params: {
 }): readonly string[] {
   const roots = getAgentScopedMediaLocalRoots(params.cfg, params.agentId);
   const fsConfig = resolveToolFsConfig({ cfg: params.cfg, agentId: params.agentId });
-  if (fsConfig.workspaceOnly === true || fsConfig.cwdOnly === true) {
+  // workdirWriteOnly only restricts writes — media local roots expansion is a read operation.
+  if (fsConfig.workspaceOnly === true) {
     return roots;
   }
   if (!resolveEffectiveToolFsRootExpansionAllowed({ cfg: params.cfg, agentId: params.agentId })) {
