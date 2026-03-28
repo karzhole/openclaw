@@ -505,7 +505,7 @@ export function buildAgentSystemPrompt(params: {
       ? `Your workspace (shared context/config) is: ${displayWorkspaceDir}`
       : "",
     params.workdirWriteOnly
-      ? "Write/edit operations are restricted to your working directory."
+      ? "Write/edit/apply_patch operations are restricted to your working directory."
       : "",
     workspaceGuidance,
     ...workspaceNotes,

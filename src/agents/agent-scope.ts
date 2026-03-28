@@ -290,6 +290,7 @@ export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
  *
  * When the agent has a `workdir` configured, returns the resolved absolute path.
  * Relative paths resolve against the agent workspace; tilde paths expand via home dir.
+ * The workdir **must** be inside the agent workspace; throws otherwise.
  * Returns `undefined` when no workdir is configured.
  */
 export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): string | undefined {
@@ -298,16 +299,21 @@ export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): strin
   if (!configured) {
     return undefined;
   }
+  const workspace = resolveAgentWorkspaceDir(cfg, id);
   const sanitized = stripNullBytes(configured);
   // Tilde-prefixed paths expand via home dir; relative paths resolve against workspace.
-  if (sanitized.startsWith("~")) {
-    return resolveUserPath(sanitized);
+  const resolved = sanitized.startsWith("~")
+    ? resolveUserPath(sanitized)
+    : path.resolve(workspace, sanitized);
+  // Validate that workdir is within workspace.
+  const relative = path.relative(workspace, resolved);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(
+      `Agent "${id}" workdir "${configured}" resolves outside workspace "${workspace}". ` +
+        `workdir must be a subdirectory of workspace.`,
+    );
   }
-  if (path.isAbsolute(sanitized)) {
-    return sanitized;
-  }
-  const workspace = resolveAgentWorkspaceDir(cfg, id);
-  return path.resolve(workspace, sanitized);
+  return resolved;
 }
 
 function normalizePathForComparison(input: string): string {

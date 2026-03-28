@@ -65,10 +65,11 @@ export type AgentConfig = {
   workspace?: string;
   /**
    * Optional per-agent working directory for tool operations.
+   * Must be a subdirectory of `workspace` (throws on startup otherwise).
    * When set, exec/write/edit tools default to this path; read tools still
    * have access to the full `workspace`.
    * Bootstrap files (AGENTS.md, SOUL.md) still load from `workspace`.
-   * Relative paths resolve against `workspace`; absolute and tilde paths are used as-is.
+   * Relative paths resolve against `workspace`.
    */
   workdir?: string;
   agentDir?: string;

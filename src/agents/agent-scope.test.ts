@@ -561,17 +561,7 @@ describe("resolveAgentWorkdir", () => {
     expect(resolveAgentWorkdir(cfg, "main")).toBeUndefined();
   });
 
-  it("returns absolute workdir as-is", () => {
-    const workdir = path.resolve(path.sep, "home", "user", "projects", "repo-1");
-    const cfg: OpenClawConfig = {
-      agents: {
-        list: [{ id: "worker", workspace: "/some/workspace", workdir }],
-      },
-    };
-    expect(resolveAgentWorkdir(cfg, "worker")).toBe(workdir);
-  });
-
-  it("resolves relative workdir against workspace, not process.cwd()", () => {
+  it("resolves relative workdir against workspace", () => {
     const workspace = path.resolve(path.sep, "home", "user", "workspace");
     const cfg: OpenClawConfig = {
       agents: {
@@ -581,23 +571,43 @@ describe("resolveAgentWorkdir", () => {
     expect(resolveAgentWorkdir(cfg, "worker")).toBe(path.join(workspace, "sub", "dir"));
   });
 
-  it("expands tilde workdir via home directory", () => {
+  it("resolves absolute workdir within workspace", () => {
+    const workspace = path.resolve(path.sep, "home", "user", "workspace");
+    const workdir = path.join(workspace, "repo-1");
     const cfg: OpenClawConfig = {
       agents: {
-        list: [{ id: "worker", workdir: "~/projects/repo-1" }],
+        list: [{ id: "worker", workspace, workdir }],
       },
     };
-    const result = resolveAgentWorkdir(cfg, "worker");
-    expect(result).toBeDefined();
-    expect(result).not.toContain("~");
-    expect(result!.endsWith(path.join("projects", "repo-1"))).toBe(true);
+    expect(resolveAgentWorkdir(cfg, "worker")).toBe(workdir);
+  });
+
+  it("throws when workdir is outside workspace", () => {
+    const workspace = path.resolve(path.sep, "home", "user", "workspace");
+    const workdir = path.resolve(path.sep, "other", "location");
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir }],
+      },
+    };
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
+  });
+
+  it("throws when relative workdir escapes workspace", () => {
+    const workspace = path.resolve(path.sep, "home", "user", "workspace");
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir: "../escape" }],
+      },
+    };
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
   });
 
   it("strips null bytes from workdir", () => {
-    const workdir = path.resolve(path.sep, "home", "user", "repo\0-1");
+    const workspace = path.resolve(path.sep, "home", "user", "workspace");
     const cfg: OpenClawConfig = {
       agents: {
-        list: [{ id: "worker", workdir }],
+        list: [{ id: "worker", workspace, workdir: "repo\0-1" }],
       },
     };
     const result = resolveAgentWorkdir(cfg, "worker");
