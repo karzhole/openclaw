@@ -303,10 +303,10 @@ export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): strin
   const workspace = resolveAgentWorkspaceDir(cfg, id);
   const relative = path.relative(workspace, resolved);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    getLog().warn(
-      `Agent "${id}" workdir "${configured}" is outside workspace "${workspace}"; ignoring.`,
+    throw new Error(
+      `Agent "${id}" workdir "${configured}" is outside workspace "${workspace}". ` +
+        `workdir must be a subdirectory of workspace.`,
     );
-    return undefined;
   }
   return resolved;
 }

@@ -572,7 +572,7 @@ describe("resolveAgentWorkdir", () => {
     expect(resolveAgentWorkdir(cfg, "worker")).toBe(workdir);
   });
 
-  it("returns undefined for workdir outside workspace", () => {
+  it("throws when workdir is outside workspace", () => {
     const workspace = path.resolve(path.sep, "home", "user", "projects");
     const workdir = path.resolve(path.sep, "other", "location");
     const cfg: OpenClawConfig = {
@@ -580,7 +580,7 @@ describe("resolveAgentWorkdir", () => {
         list: [{ id: "worker", workspace, workdir }],
       },
     };
-    expect(resolveAgentWorkdir(cfg, "worker")).toBeUndefined();
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
   });
 
   it("strips null bytes from workdir", () => {
