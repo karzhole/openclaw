@@ -386,28 +386,6 @@ export function createExecTool(
         workdir = resolveWorkdir(rawWorkdir, warnings);
       }
 
-      // Enforce workdirRoot restriction: reject workdir outside the allowed root.
-      // Use realpath to resolve symlinks/junctions so a symlink inside workdir
-      // pointing outside the allowed root cannot bypass the guard.
-      if (defaults?.workdirRoot) {
-        let realWorkdir: string;
-        try {
-          realWorkdir = await fs.realpath(workdir);
-        } catch {
-          return failedTextResult(
-            `workdir "${rawWorkdir}" does not exist or is not accessible.`,
-          );
-        }
-        const realRoot = await fs.realpath(defaults.workdirRoot).catch(() => defaults.workdirRoot);
-        const relative = path.relative(realRoot, realWorkdir);
-        if (relative.startsWith("..") || path.isAbsolute(relative)) {
-          return failedTextResult(
-            `workdir "${rawWorkdir}" resolves outside the allowed root "${defaults.workdirRoot}".`,
-          );
-        }
-        workdir = realWorkdir;
-      }
-
       const inheritedBaseEnv = coerceEnv(process.env);
       const hostEnvResult =
         host === "sandbox"

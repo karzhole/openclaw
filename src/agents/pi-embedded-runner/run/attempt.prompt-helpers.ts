@@ -100,8 +100,7 @@ export function resolveAttemptFsWorkspaceOnly(params: {
   sessionAgentId: string;
 }): boolean {
   const fsConfig = resolveToolFsConfig({ cfg: params.config, agentId: params.sessionAgentId });
-  // workdirWriteOnly only restricts writes — prompt image loading is a read operation.
-  return fsConfig.workspaceOnly === true;
+  return fsConfig.workspaceOnly === true || fsConfig.workdirWriteOnly === true;
 }
 
 export function prependSystemPromptAddition(params: {

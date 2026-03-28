@@ -486,7 +486,9 @@ export function createImageGenerateTool(options?: {
       ? {
           root: options.sandbox.root.trim(),
           bridge: options.sandbox.bridge,
-          workspaceOnly: options.fsPolicy?.workspaceOnly === true,
+          workspaceOnly:
+            options.fsPolicy?.workspaceOnly === true ||
+            options.fsPolicy?.workdirWriteOnly === true,
         }
       : null;
 
@@ -558,7 +560,9 @@ export function createImageGenerateTool(options?: {
         imageInputs,
         workspaceDir: options?.workspaceDir,
         sandboxConfig,
-        fsRestricted: options?.fsPolicy?.workspaceOnly === true,
+        fsRestricted:
+          options?.fsPolicy?.workspaceOnly === true ||
+          options?.fsPolicy?.workdirWriteOnly === true,
       });
       const inputImages = loadedReferenceImages.map((entry) => entry.sourceImage);
       const resolution =

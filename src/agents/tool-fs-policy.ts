@@ -54,8 +54,7 @@ export function resolveEffectiveToolFsRootExpansionAllowed(params: {
   const profileAlsoAllow = new Set(agentTools?.alsoAllow ?? globalTools?.alsoAllow ?? []);
   const fsConfig = resolveToolFsConfig(params);
   const hasExplicitFsConfig = agentTools?.fs !== undefined || globalTools?.fs !== undefined;
-  // workdirWriteOnly only restricts writes — root expansion is a read-path concern.
-  if (fsConfig.workspaceOnly === true) {
+  if (fsConfig.workspaceOnly === true || fsConfig.workdirWriteOnly === true) {
     return false;
   }
   if (hasExplicitFsConfig) {

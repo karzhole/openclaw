@@ -372,7 +372,7 @@ export function createOpenClawCodingTools(options?: {
   // resolveAgentWorkdir already validates workdir is within workspace.
   const agentWorkdir =
     options?.config && agentId ? resolveAgentWorkdir(options.config, agentId) : undefined;
-  // effectiveWriteRoot: use workdir for write/edit/exec, workspaceRoot for reads.
+  // effectiveWriteRoot: use workdir when configured, otherwise workspaceRoot.
   const effectiveWriteRoot = agentWorkdir ?? workspaceRoot;
   const workspaceOnly = fsPolicy.workspaceOnly;
   const workdirWriteOnly = fsPolicy.workdirWriteOnly;
@@ -431,7 +431,13 @@ export function createOpenClawCodingTools(options?: {
           modelContextWindowTokens: options?.modelContextWindowTokens,
           imageSanitization,
         });
-        // Read tool: workdirWriteOnly does NOT restrict reads — only workspaceOnly does.
+        if (workdirWriteOnly && sandboxWorkdirRoot) {
+          return [
+            wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxWorkdirRoot, {
+              containerWorkdir: sandboxContainerWorkdir ?? sandbox.containerWorkdir,
+            }),
+          ];
+        }
         return [
           workspaceOnly
             ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
@@ -445,7 +451,9 @@ export function createOpenClawCodingTools(options?: {
         modelContextWindowTokens: options?.modelContextWindowTokens,
         imageSanitization,
       });
-      // Read tool: workdirWriteOnly does NOT restrict reads — only workspaceOnly does.
+      if (workdirWriteOnly && workdirGuardRoot) {
+        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
+      }
       if (workspaceOnly) {
         return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
       }
@@ -502,7 +510,6 @@ export function createOpenClawCodingTools(options?: {
     safeBinProfiles: options?.exec?.safeBinProfiles ?? execConfig.safeBinProfiles,
     agentId,
     cwd: effectiveWriteRoot,
-    workdirRoot: workdirWriteOnly ? effectiveWriteRoot : undefined,
     allowBackground,
     scopeKey,
     sessionKey: options?.sessionKey,

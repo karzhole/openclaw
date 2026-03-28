@@ -286,10 +286,10 @@ export type FsToolsConfig = {
    */
   workspaceOnly?: boolean;
   /**
-   * Restrict write/edit/exec/apply_patch tools to the agent `workdir` directory
-   * while keeping read access to the full `workspace`.
+   * Restrict all filesystem tools (read/write/edit/apply_patch) to the agent
+   * `workdir` directory — same scope as `workspaceOnly` but narrowed to workdir.
    * Requires `workdir` to be set on the agent. When no `workdir` is configured,
-   * falls back to workspace-level restriction for writes.
+   * falls back to workspace-level restriction.
    * Default: false.
    */
   workdirWriteOnly?: boolean;
