@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   hasConfiguredModelFallbacks,
@@ -561,20 +561,59 @@ describe("resolveAgentWorkdir", () => {
     expect(resolveAgentWorkdir(cfg, "main")).toBeUndefined();
   });
 
+  // These tests use real directories because resolveAgentWorkdir now
+  // calls fs.realpathSync to prevent symlink escapes.
+  let tmpBase: string;
+  beforeEach(() => {
+    tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "oc-workdir-test-"));
+  });
+  afterEach(() => {
+    fs.rmSync(tmpBase, { recursive: true, force: true });
+  });
+
   it("resolves a workdir that is within workspace", () => {
-    const workspace = path.resolve(path.sep, "home", "user", "projects");
-    const workdir = path.resolve(workspace, "repo-1");
+    const workspace = tmpBase;
+    const workdir = path.join(workspace, "repo-1");
+    fs.mkdirSync(workdir, { recursive: true });
     const cfg: OpenClawConfig = {
       agents: {
         list: [{ id: "worker", workspace, workdir }],
       },
     };
-    expect(resolveAgentWorkdir(cfg, "worker")).toBe(workdir);
+    expect(resolveAgentWorkdir(cfg, "worker")).toBe(fs.realpathSync(workdir));
+  });
+
+  it("resolves relative workdir against workspace, not process.cwd()", () => {
+    const workspace = tmpBase;
+    fs.mkdirSync(path.join(workspace, "sub", "dir"), { recursive: true });
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir: "sub/dir" }],
+      },
+    };
+    expect(resolveAgentWorkdir(cfg, "worker")).toBe(
+      fs.realpathSync(path.join(workspace, "sub", "dir")),
+    );
+  });
+
+  it("throws when relative workdir escapes workspace", () => {
+    const workspace = path.join(tmpBase, "ws");
+    const outside = path.join(tmpBase, "escape");
+    fs.mkdirSync(workspace, { recursive: true });
+    fs.mkdirSync(outside, { recursive: true });
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir: "../escape" }],
+      },
+    };
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
   });
 
   it("throws when workdir is outside workspace", () => {
-    const workspace = path.resolve(path.sep, "home", "user", "projects");
-    const workdir = path.resolve(path.sep, "other", "location");
+    const workspace = path.join(tmpBase, "ws");
+    const workdir = path.join(tmpBase, "other");
+    fs.mkdirSync(workspace, { recursive: true });
+    fs.mkdirSync(workdir, { recursive: true });
     const cfg: OpenClawConfig = {
       agents: {
         list: [{ id: "worker", workspace, workdir }],
@@ -583,8 +622,36 @@ describe("resolveAgentWorkdir", () => {
     expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
   });
 
+  it("throws when workdir does not exist", () => {
+    const workspace = tmpBase;
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir: path.join(workspace, "missing") }],
+      },
+    };
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/does not exist/);
+  });
+
+  it("throws when workdir is a symlink pointing outside workspace", () => {
+    const workspace = path.join(tmpBase, "ws");
+    const outside = path.join(tmpBase, "outside-target");
+    fs.mkdirSync(workspace, { recursive: true });
+    fs.mkdirSync(outside, { recursive: true });
+    const link = path.join(workspace, "sneaky-link");
+    fs.symlinkSync(outside, link, "junction");
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "worker", workspace, workdir: link }],
+      },
+    };
+    expect(() => resolveAgentWorkdir(cfg, "worker")).toThrow(/outside workspace/);
+  });
+
   it("strips null bytes from workdir", () => {
-    const workspace = path.resolve(path.sep, "home", "user", "projects");
+    const workspace = tmpBase;
+    const sub = path.join(workspace, "repo-1");
+    fs.mkdirSync(sub, { recursive: true });
+    // Null byte is stripped, so "repo\0-1" → "repo-1" which exists
     const workdir = path.join(workspace, "repo\0-1");
     const cfg: OpenClawConfig = {
       agents: {

@@ -28,6 +28,8 @@ export type ExecToolDefaults = {
   notifyOnExit?: boolean;
   notifyOnExitEmptySuccess?: boolean;
   cwd?: string;
+  /** When set, exec rejects any resolved workdir outside this root. */
+  workdirRoot?: string;
 };
 
 export type ExecElevatedDefaults = {

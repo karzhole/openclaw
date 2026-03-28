@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
@@ -355,7 +356,18 @@ export function createOpenClawCodingTools(options?: {
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
-  const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
+  const workspaceRootRaw = resolveWorkspaceRoot(options?.workspaceDir);
+  // Canonicalize to real path so symlink/junction aliases match the canonical
+  // paths returned by resolveAgentWorkdir (which also uses realpathSync).
+  // Without this, path.relative(workspaceRoot, agentWorkdir) can produce ".."
+  // for a workdir that is genuinely inside the workspace, causing sandbox
+  // workdir mapping to silently fall back to workspace-wide access.
+  let workspaceRoot: string;
+  try {
+    workspaceRoot = fs.realpathSync(workspaceRootRaw);
+  } catch {
+    workspaceRoot = workspaceRootRaw;
+  }
   // Resolve agent workdir: when configured, write/edit/exec tools default to this path.
   // resolveAgentWorkdir already validates workdir is within workspace.
   const agentWorkdir =
@@ -377,6 +389,19 @@ export function createOpenClawCodingTools(options?: {
       return undefined;
     }
     return path.join(sandboxRoot, relative);
+  })();
+  // Container-space workdir path for sandbox guards. Guards need this to correctly
+  // map container absolute paths (e.g. /workspace/subdir/file) back to host paths
+  // relative to sandboxWorkdirRoot, not the whole sandbox workspace.
+  const sandboxContainerWorkdir = (() => {
+    if (!sandboxWorkdirRoot || !sandbox || !agentWorkdir) {
+      return undefined;
+    }
+    const relative = path.relative(workspaceRoot, agentWorkdir);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    return path.posix.join(sandbox.containerWorkdir, ...relative.split(path.sep));
   })();
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
@@ -477,6 +502,7 @@ export function createOpenClawCodingTools(options?: {
     safeBinProfiles: options?.exec?.safeBinProfiles ?? execConfig.safeBinProfiles,
     agentId,
     cwd: effectiveWriteRoot,
+    workdirRoot: workdirWriteOnly ? effectiveWriteRoot : undefined,
     allowBackground,
     scopeKey,
     sessionKey: options?.sessionKey,
@@ -524,13 +550,16 @@ export function createOpenClawCodingTools(options?: {
         ? (() => {
             // Write/edit tools: restrict to workdir subdirectory when workdirWriteOnly.
             const sandboxWriteGuardRoot = sandboxWorkdirRoot ?? sandboxRoot;
+            // Use container-space workdir path so the guard correctly maps
+            // /workspace/agent-dir/file → sandboxWorkdirRoot/file (not /workspace/file → sandboxWorkdirRoot/file).
+            const guardContainerWorkdir = sandboxContainerWorkdir ?? sandbox.containerWorkdir;
             return [
               workspaceOnly || workdirWriteOnly
                 ? wrapToolWorkspaceRootGuardWithOptions(
                     createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
                     sandboxWriteGuardRoot,
                     {
-                      containerWorkdir: sandbox.containerWorkdir,
+                      containerWorkdir: guardContainerWorkdir,
                     },
                   )
                 : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
@@ -539,7 +568,7 @@ export function createOpenClawCodingTools(options?: {
                     createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
                     sandboxWriteGuardRoot,
                     {
-                      containerWorkdir: sandbox.containerWorkdir,
+                      containerWorkdir: guardContainerWorkdir,
                     },
                   )
                 : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),

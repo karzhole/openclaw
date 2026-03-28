@@ -298,13 +298,34 @@ export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): strin
   if (!configured) {
     return undefined;
   }
-  const resolved = stripNullBytes(resolveUserPath(configured));
-  // Validate that workdir is within workspace.
   const workspace = resolveAgentWorkspaceDir(cfg, id);
-  const relative = path.relative(workspace, resolved);
+  // Resolve relative paths against workspace, not process.cwd().
+  // Tilde-prefixed paths are still expanded via home directory.
+  const sanitized = stripNullBytes(configured);
+  const lexical = sanitized.startsWith("~")
+    ? resolveUserPath(sanitized)
+    : path.resolve(workspace, sanitized);
+  // Resolve symlinks/junctions so a link inside workspace pointing outside
+  // cannot bypass the boundary check.
+  let resolved: string;
+  try {
+    resolved = fs.realpathSync(lexical);
+  } catch {
+    throw new Error(
+      `Agent "${id}" workdir "${configured}" does not exist or is not accessible.`,
+    );
+  }
+  let realWorkspace: string;
+  try {
+    realWorkspace = fs.realpathSync(workspace);
+  } catch {
+    realWorkspace = workspace;
+  }
+  // Validate that workdir is within workspace.
+  const relative = path.relative(realWorkspace, resolved);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(
-      `Agent "${id}" workdir "${configured}" is outside workspace "${workspace}". ` +
+      `Agent "${id}" workdir "${configured}" is outside workspace "${realWorkspace}". ` +
         `workdir must be a subdirectory of workspace.`,
     );
   }
