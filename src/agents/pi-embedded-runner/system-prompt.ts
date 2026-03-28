@@ -10,6 +10,8 @@ import type { ReasoningLevel, ThinkLevel } from "./utils.js";
 
 export function buildEmbeddedSystemPrompt(params: {
   workspaceDir: string;
+  workdir?: string;
+  workdirWriteOnly?: boolean;
   defaultThinkLevel?: ThinkLevel;
   reasoningLevel?: ReasoningLevel;
   extraSystemPrompt?: string;
@@ -55,6 +57,8 @@ export function buildEmbeddedSystemPrompt(params: {
 }): string {
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
+    workdir: params.workdir,
+    workdirWriteOnly: params.workdirWriteOnly,
     defaultThinkLevel: params.defaultThinkLevel,
     reasoningLevel: params.reasoningLevel,
     extraSystemPrompt: params.extraSystemPrompt,

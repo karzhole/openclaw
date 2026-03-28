@@ -32,7 +32,8 @@ import { resolveUserPath } from "../../../utils.js";
 import { normalizeMessageChannel } from "../../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../../agent-paths.js";
-import { resolveSessionAgentIds } from "../../agent-scope.js";
+import { resolveAgentWorkdir, resolveSessionAgentIds } from "../../agent-scope.js";
+import { resolveToolFsConfig } from "../../tool-fs-policy.js";
 import { createAnthropicPayloadLogger } from "../../anthropic-payload-log.js";
 import { createAnthropicVertexStreamFnForModel } from "../../anthropic-vertex-stream.js";
 import {
@@ -593,8 +594,14 @@ export async function runEmbeddedAttempt(
       ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
       : undefined;
 
+    const agentWorkdir = params.config
+      ? resolveAgentWorkdir(params.config, sessionAgentId)
+      : undefined;
+    const fsConfig = resolveToolFsConfig({ cfg: params.config, agentId: sessionAgentId });
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
+      workdir: agentWorkdir,
+      workdirWriteOnly: fsConfig.workdirWriteOnly === true || undefined,
       defaultThinkLevel: params.thinkLevel,
       reasoningLevel: params.reasoningLevel ?? "off",
       extraSystemPrompt: params.extraSystemPrompt,

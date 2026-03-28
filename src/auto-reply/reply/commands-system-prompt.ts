@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
+import { resolveAgentWorkdir, resolveSessionAgentIds } from "../../agents/agent-scope.js";
+import { resolveToolFsConfig } from "../../agents/tool-fs-policy.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import type { EmbeddedContextFile } from "../../agents/pi-embedded-helpers.js";
@@ -110,8 +111,14 @@ export async function resolveCommandsSystemPromptBundle(
     : { enabled: false };
   const ttsHint = params.cfg ? buildTtsSystemPromptHint(params.cfg) : undefined;
 
+  const agentWorkdir = params.cfg
+    ? resolveAgentWorkdir(params.cfg, sessionAgentId)
+    : undefined;
+  const fsConfig = resolveToolFsConfig({ cfg: params.cfg, agentId: sessionAgentId });
   const systemPrompt = buildAgentSystemPrompt({
     workspaceDir,
+    workdir: agentWorkdir,
+    workdirWriteOnly: fsConfig.workdirWriteOnly === true || undefined,
     defaultThinkLevel: params.resolvedThinkLevel,
     reasoningLevel: params.resolvedReasoningLevel,
     extraSystemPrompt: undefined,

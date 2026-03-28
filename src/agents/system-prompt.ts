@@ -175,6 +175,10 @@ function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readT
 
 export function buildAgentSystemPrompt(params: {
   workspaceDir: string;
+  /** Optional per-agent working directory (separate from workspace). */
+  workdir?: string;
+  /** When true, write/edit operations are restricted to workdir. */
+  workdirWriteOnly?: boolean;
   defaultThinkLevel?: ThinkLevel;
   reasoningLevel?: ReasoningLevel;
   extraSystemPrompt?: string;
@@ -372,6 +376,7 @@ export function buildAgentSystemPrompt(params: {
     params.sandboxInfo?.enabled && sanitizedSandboxContainerWorkspace
       ? sanitizedSandboxContainerWorkspace
       : sanitizedWorkspaceDir;
+  const sanitizedWorkdir = params.workdir ? sanitizeForPromptLiteral(params.workdir) : undefined;
   const workspaceGuidance =
     params.sandboxInfo?.enabled && sanitizedSandboxContainerWorkspace
       ? `For read/write/edit/apply_patch, file paths resolve against host workspace: ${sanitizedWorkspaceDir}. For bash/exec commands, use sandbox container paths under ${sanitizedSandboxContainerWorkspace} (or relative paths from that workdir), not host paths. Prefer relative paths so both sandboxed exec and file tools work consistently.`
@@ -493,7 +498,15 @@ export function buildAgentSystemPrompt(params: {
       ? "If you need the current date, time, or day of week, run session_status (📊 session_status)."
       : "",
     "## Workspace",
-    `Your working directory is: ${displayWorkspaceDir}`,
+    sanitizedWorkdir
+      ? `Your working directory is: ${sanitizedWorkdir}`
+      : `Your working directory is: ${displayWorkspaceDir}`,
+    sanitizedWorkdir
+      ? `Your workspace (shared context/config) is: ${displayWorkspaceDir}`
+      : "",
+    params.workdirWriteOnly
+      ? "Write/edit operations are restricted to your working directory."
+      : "",
     workspaceGuidance,
     ...workspaceNotes,
     "",

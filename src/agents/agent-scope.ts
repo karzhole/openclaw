@@ -288,9 +288,9 @@ export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
 /**
  * Resolve the effective tool working directory for an agent.
  *
- * When the agent has a `workdir` configured, returns the resolved path.
- * The workdir must be a subdirectory of the agent's workspace; paths that
- * escape the workspace boundary are silently ignored (returns `undefined`).
+ * When the agent has a `workdir` configured, returns the resolved absolute path.
+ * Relative paths resolve against the agent workspace; tilde paths expand via home dir.
+ * Returns `undefined` when no workdir is configured.
  */
 export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): string | undefined {
   const id = normalizeAgentId(agentId);
@@ -298,38 +298,16 @@ export function resolveAgentWorkdir(cfg: OpenClawConfig, agentId: string): strin
   if (!configured) {
     return undefined;
   }
-  const workspace = resolveAgentWorkspaceDir(cfg, id);
-  // Resolve relative paths against workspace, not process.cwd().
-  // Tilde-prefixed paths are still expanded via home directory.
   const sanitized = stripNullBytes(configured);
-  const lexical = sanitized.startsWith("~")
-    ? resolveUserPath(sanitized)
-    : path.resolve(workspace, sanitized);
-  // Resolve symlinks/junctions so a link inside workspace pointing outside
-  // cannot bypass the boundary check.
-  let resolved: string;
-  try {
-    resolved = fs.realpathSync(lexical);
-  } catch {
-    throw new Error(
-      `Agent "${id}" workdir "${configured}" does not exist or is not accessible.`,
-    );
+  // Tilde-prefixed paths expand via home dir; relative paths resolve against workspace.
+  if (sanitized.startsWith("~")) {
+    return resolveUserPath(sanitized);
   }
-  let realWorkspace: string;
-  try {
-    realWorkspace = fs.realpathSync(workspace);
-  } catch {
-    realWorkspace = workspace;
+  if (path.isAbsolute(sanitized)) {
+    return sanitized;
   }
-  // Validate that workdir is within workspace.
-  const relative = path.relative(realWorkspace, resolved);
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(
-      `Agent "${id}" workdir "${configured}" is outside workspace "${realWorkspace}". ` +
-        `workdir must be a subdirectory of workspace.`,
-    );
-  }
-  return resolved;
+  const workspace = resolveAgentWorkspaceDir(cfg, id);
+  return path.resolve(workspace, sanitized);
 }
 
 function normalizePathForComparison(input: string): string {

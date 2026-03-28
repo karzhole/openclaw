@@ -31,7 +31,8 @@ import { resolveUserPath } from "../../utils.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
-import { resolveSessionAgentIds } from "../agent-scope.js";
+import { resolveAgentWorkdir, resolveSessionAgentIds } from "../agent-scope.js";
+import { resolveToolFsConfig } from "../tool-fs-policy.js";
 import type { ExecElevatedDefaults } from "../bash-tools.js";
 import { makeBootstrapWarn, resolveBootstrapContextForRun } from "../bootstrap-files.js";
 import { listChannelSupportedActions, resolveChannelMessageToolHints } from "../channel-tools.js";
@@ -617,8 +618,14 @@ export async function compactEmbeddedPiSessionDirect(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
     const ownerDisplay = resolveOwnerDisplaySetting(params.config);
+    const agentWorkdir = params.config
+      ? resolveAgentWorkdir(params.config, sessionAgentId)
+      : undefined;
+    const fsConfig = resolveToolFsConfig({ cfg: params.config, agentId: sessionAgentId });
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
+      workdir: agentWorkdir,
+      workdirWriteOnly: fsConfig.workdirWriteOnly === true || undefined,
       defaultThinkLevel: params.thinkLevel,
       reasoningLevel: params.reasoningLevel ?? "off",
       extraSystemPrompt: params.extraSystemPrompt,

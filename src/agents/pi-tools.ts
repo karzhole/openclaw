@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
@@ -356,11 +355,7 @@ export function createOpenClawCodingTools(options?: {
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
-  // Canonicalize workspace root so symlink aliases match resolveAgentWorkdir's canonical paths.
-  const workspaceRoot = (() => {
-    const raw = resolveWorkspaceRoot(options?.workspaceDir);
-    try { return fs.realpathSync(raw); } catch { return raw; }
-  })();
+  const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
   const agentWorkdir =
     options?.config && agentId ? resolveAgentWorkdir(options.config, agentId) : undefined;
   const effectiveWriteRoot = agentWorkdir ?? workspaceRoot;

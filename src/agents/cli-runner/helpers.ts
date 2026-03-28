@@ -18,7 +18,9 @@ import { detectImageReferences, loadImageFromRef } from "../pi-embedded-runner/r
 import type { SandboxFsBridge } from "../sandbox/fs-bridge.js";
 import { detectRuntimeShell } from "../shell-utils.js";
 import { buildSystemPromptParams } from "../system-prompt-params.js";
+import { resolveAgentWorkdir } from "../agent-scope.js";
 import { buildAgentSystemPrompt } from "../system-prompt.js";
+import { resolveToolFsConfig } from "../tool-fs-policy.js";
 import { sanitizeImageBlocks } from "../tool-images.js";
 export { buildCliSupervisorScopeKey, resolveCliNoOutputTimeoutMs } from "./reliability.js";
 
@@ -62,8 +64,14 @@ export function buildSystemPrompt(params: {
   });
   const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
   const ownerDisplay = resolveOwnerDisplaySetting(params.config);
+  const agentWorkdir = params.config && params.agentId
+    ? resolveAgentWorkdir(params.config, params.agentId)
+    : undefined;
+  const fsConfig = resolveToolFsConfig({ cfg: params.config, agentId: params.agentId });
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
+    workdir: agentWorkdir,
+    workdirWriteOnly: fsConfig.workdirWriteOnly === true || undefined,
     defaultThinkLevel: params.defaultThinkLevel,
     extraSystemPrompt: params.extraSystemPrompt,
     ownerNumbers: params.ownerNumbers,
