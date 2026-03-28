@@ -54,7 +54,7 @@ export function resolveEffectiveToolFsRootExpansionAllowed(params: {
   const profileAlsoAllow = new Set(agentTools?.alsoAllow ?? globalTools?.alsoAllow ?? []);
   const fsConfig = resolveToolFsConfig(params);
   const hasExplicitFsConfig = agentTools?.fs !== undefined || globalTools?.fs !== undefined;
-  if (fsConfig.workspaceOnly === true || fsConfig.workdirWriteOnly === true) {
+  if (fsConfig.workspaceOnly === true) {
     return false;
   }
   if (hasExplicitFsConfig) {

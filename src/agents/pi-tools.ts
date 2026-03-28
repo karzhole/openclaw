@@ -356,53 +356,30 @@ export function createOpenClawCodingTools(options?: {
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
-  const workspaceRootRaw = resolveWorkspaceRoot(options?.workspaceDir);
-  // Canonicalize to real path so symlink/junction aliases match the canonical
-  // paths returned by resolveAgentWorkdir (which also uses realpathSync).
-  // Without this, path.relative(workspaceRoot, agentWorkdir) can produce ".."
-  // for a workdir that is genuinely inside the workspace, causing sandbox
-  // workdir mapping to silently fall back to workspace-wide access.
-  let workspaceRoot: string;
-  try {
-    workspaceRoot = fs.realpathSync(workspaceRootRaw);
-  } catch {
-    workspaceRoot = workspaceRootRaw;
-  }
-  // Resolve agent workdir: when configured, write/edit/exec tools default to this path.
-  // resolveAgentWorkdir already validates workdir is within workspace.
+  // Canonicalize workspace root so symlink aliases match resolveAgentWorkdir's canonical paths.
+  const workspaceRoot = (() => {
+    const raw = resolveWorkspaceRoot(options?.workspaceDir);
+    try { return fs.realpathSync(raw); } catch { return raw; }
+  })();
   const agentWorkdir =
     options?.config && agentId ? resolveAgentWorkdir(options.config, agentId) : undefined;
-  // effectiveWriteRoot: use workdir when configured, otherwise workspaceRoot.
   const effectiveWriteRoot = agentWorkdir ?? workspaceRoot;
   const workspaceOnly = fsPolicy.workspaceOnly;
   const workdirWriteOnly = fsPolicy.workdirWriteOnly;
-  // Write guard root: restrict writes to workdir when workdirWriteOnly is set.
-  const workdirGuardRoot = workdirWriteOnly ? effectiveWriteRoot : undefined;
-  // Compute sandbox-mapped workdir: map the host-side workdir to the equivalent
-  // subdirectory inside the sandbox so write guards restrict to the workdir boundary.
-  const sandboxWorkdirRoot = (() => {
-    if (!sandboxRoot || !workdirWriteOnly || !agentWorkdir) {
-      return undefined;
-    }
-    const relative = path.relative(workspaceRoot, agentWorkdir);
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-      return undefined;
-    }
-    return path.join(sandboxRoot, relative);
+  // Guard root for write/edit/apply_patch: workdirWriteOnly → workdir, workspaceOnly → workspace.
+  const writeGuardRoot = workdirWriteOnly ? effectiveWriteRoot
+    : workspaceOnly ? workspaceRoot : undefined;
+  // Map workdir into sandbox-space for sandbox write guards.
+  const sandboxWorkdirRel = (() => {
+    if (!workdirWriteOnly || !sandboxRoot || !agentWorkdir) return undefined;
+    const rel = path.relative(workspaceRoot, agentWorkdir);
+    return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : undefined;
   })();
-  // Container-space workdir path for sandbox guards. Guards need this to correctly
-  // map container absolute paths (e.g. /workspace/subdir/file) back to host paths
-  // relative to sandboxWorkdirRoot, not the whole sandbox workspace.
-  const sandboxContainerWorkdir = (() => {
-    if (!sandboxWorkdirRoot || !sandbox || !agentWorkdir) {
-      return undefined;
-    }
-    const relative = path.relative(workspaceRoot, agentWorkdir);
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-      return undefined;
-    }
-    return path.posix.join(sandbox.containerWorkdir, ...relative.split(path.sep));
-  })();
+  const sandboxWriteGuardRoot = sandboxWorkdirRel
+    ? path.join(sandboxRoot!, sandboxWorkdirRel) : (workspaceOnly ? sandboxRoot : undefined);
+  const sandboxWriteContainerWorkdir = sandboxWorkdirRel && sandbox
+    ? path.posix.join(sandbox.containerWorkdir, ...sandboxWorkdirRel.split(path.sep))
+    : sandbox?.containerWorkdir;
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
   // (tools.fs.workspaceOnly is a separate umbrella flag for read/write/edit/apply_patch.)
@@ -431,13 +408,6 @@ export function createOpenClawCodingTools(options?: {
           modelContextWindowTokens: options?.modelContextWindowTokens,
           imageSanitization,
         });
-        if (workdirWriteOnly && sandboxWorkdirRoot) {
-          return [
-            wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxWorkdirRoot, {
-              containerWorkdir: sandboxContainerWorkdir ?? sandbox.containerWorkdir,
-            }),
-          ];
-        }
         return [
           workspaceOnly
             ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
@@ -451,48 +421,24 @@ export function createOpenClawCodingTools(options?: {
         modelContextWindowTokens: options?.modelContextWindowTokens,
         imageSanitization,
       });
-      if (workdirWriteOnly && workdirGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
-      }
-      if (workspaceOnly) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
-      }
-      return [wrapped];
+      return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
     }
     if (tool.name === "bash" || tool.name === execToolName) {
       return [];
     }
     if (tool.name === "write") {
-      if (sandboxRoot) {
-        return [];
-      }
-      const fsRestricted = workspaceOnly || workdirWriteOnly;
+      if (sandboxRoot) return [];
       const wrapped = createHostWorkspaceWriteTool(effectiveWriteRoot, {
-        workspaceOnly: fsRestricted,
+        workspaceOnly: !!writeGuardRoot,
       });
-      if (workspaceOnly) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
-      }
-      if (workdirGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
-      }
-      return [wrapped];
+      return [writeGuardRoot ? wrapToolWorkspaceRootGuard(wrapped, writeGuardRoot) : wrapped];
     }
     if (tool.name === "edit") {
-      if (sandboxRoot) {
-        return [];
-      }
-      const fsRestricted = workspaceOnly || workdirWriteOnly;
+      if (sandboxRoot) return [];
       const wrapped = createHostWorkspaceEditTool(effectiveWriteRoot, {
-        workspaceOnly: fsRestricted,
+        workspaceOnly: !!writeGuardRoot,
       });
-      if (workspaceOnly) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workspaceRoot)];
-      }
-      if (workdirGuardRoot) {
-        return [wrapToolWorkspaceRootGuard(wrapped, workdirGuardRoot)];
-      }
-      return [wrapped];
+      return [writeGuardRoot ? wrapToolWorkspaceRootGuard(wrapped, writeGuardRoot) : wrapped];
     }
     return [tool];
   });
@@ -543,7 +489,7 @@ export function createOpenClawCodingTools(options?: {
     !applyPatchEnabled || (sandboxRoot && !allowWorkspaceWrites)
       ? null
       : createApplyPatchTool({
-          cwd: sandboxWorkdirRoot ?? sandboxRoot ?? effectiveWriteRoot,
+          cwd: sandboxWriteGuardRoot ?? sandboxRoot ?? effectiveWriteRoot,
           sandbox:
             sandboxRoot && allowWorkspaceWrites
               ? { root: sandboxRoot, bridge: sandboxFsBridge! }
@@ -552,36 +498,23 @@ export function createOpenClawCodingTools(options?: {
         });
   const tools: AnyAgentTool[] = [
     ...base,
-    ...(sandboxRoot
-      ? allowWorkspaceWrites
-        ? (() => {
-            // Write/edit tools: restrict to workdir subdirectory when workdirWriteOnly.
-            const sandboxWriteGuardRoot = sandboxWorkdirRoot ?? sandboxRoot;
-            // Use container-space workdir path so the guard correctly maps
-            // /workspace/agent-dir/file → sandboxWorkdirRoot/file (not /workspace/file → sandboxWorkdirRoot/file).
-            const guardContainerWorkdir = sandboxContainerWorkdir ?? sandbox.containerWorkdir;
-            return [
-              workspaceOnly || workdirWriteOnly
-                ? wrapToolWorkspaceRootGuardWithOptions(
-                    createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                    sandboxWriteGuardRoot,
-                    {
-                      containerWorkdir: guardContainerWorkdir,
-                    },
-                  )
-                : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-              workspaceOnly || workdirWriteOnly
-                ? wrapToolWorkspaceRootGuardWithOptions(
-                    createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                    sandboxWriteGuardRoot,
-                    {
-                      containerWorkdir: guardContainerWorkdir,
-                    },
-                  )
-                : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-            ];
-          })()
-        : []
+    ...(sandboxRoot && allowWorkspaceWrites
+      ? [
+          sandboxWriteGuardRoot
+            ? wrapToolWorkspaceRootGuardWithOptions(
+                createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+                sandboxWriteGuardRoot,
+                { containerWorkdir: sandboxWriteContainerWorkdir! },
+              )
+            : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+          sandboxWriteGuardRoot
+            ? wrapToolWorkspaceRootGuardWithOptions(
+                createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+                sandboxWriteGuardRoot,
+                { containerWorkdir: sandboxWriteContainerWorkdir! },
+              )
+            : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
+        ]
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
     execTool as unknown as AnyAgentTool,

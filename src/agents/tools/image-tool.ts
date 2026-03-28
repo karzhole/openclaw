@@ -349,9 +349,7 @@ export function createImageTool(options?: {
           ? {
               root: options.sandbox.root.trim(),
               bridge: options.sandbox.bridge,
-              workspaceOnly:
-                options.fsPolicy?.workspaceOnly === true ||
-                options.fsPolicy?.workdirWriteOnly === true,
+              workspaceOnly: options.fsPolicy?.workspaceOnly === true,
             }
           : null;
 
@@ -425,9 +423,7 @@ export function createImageTool(options?: {
         const mediaLocalRoots = resolveMediaToolLocalRoots(
           options?.workspaceDir,
           {
-            workspaceOnly:
-              options?.fsPolicy?.workspaceOnly === true ||
-              options?.fsPolicy?.workdirWriteOnly === true,
+            workspaceOnly: options?.fsPolicy?.workspaceOnly === true,
           },
           resolvedPath ? [resolvedPath] : undefined,
         );

@@ -6,7 +6,7 @@ import type {
 } from "../../../plugins/types.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../../routing/session-key.js";
 import { joinPresentTextSegments } from "../../../shared/text/join-segments.js";
-import { resolveToolFsConfig } from "../../tool-fs-policy.js";
+import { resolveEffectiveToolFsWorkspaceOnly } from "../../tool-fs-policy.js";
 import type { CompactEmbeddedPiSessionParams } from "../compact.js";
 import { buildEmbeddedCompactionRuntimeContext } from "../compaction-runtime-context.js";
 import { log } from "../logger.js";
@@ -99,8 +99,10 @@ export function resolveAttemptFsWorkspaceOnly(params: {
   config?: OpenClawConfig;
   sessionAgentId: string;
 }): boolean {
-  const fsConfig = resolveToolFsConfig({ cfg: params.config, agentId: params.sessionAgentId });
-  return fsConfig.workspaceOnly === true || fsConfig.workdirWriteOnly === true;
+  return resolveEffectiveToolFsWorkspaceOnly({
+    cfg: params.config,
+    agentId: params.sessionAgentId,
+  });
 }
 
 export function prependSystemPromptAddition(params: {

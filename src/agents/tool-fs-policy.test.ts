@@ -163,13 +163,14 @@ describe("resolveEffectiveToolFsRootExpansionAllowed", () => {
     expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "messenger" })).toBe(false);
   });
 
-  it("disables root expansion when workdirWriteOnly is set", () => {
+  it("does not disable root expansion when only workdirWriteOnly is set", () => {
     const cfg: OpenClawConfig = {
       tools: {
         fs: { workdirWriteOnly: true },
       },
     };
-    expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "main" })).toBe(false);
+    // workdirWriteOnly restricts writes only — root expansion (a read concern) stays allowed.
+    expect(resolveEffectiveToolFsRootExpansionAllowed({ cfg, agentId: "main" })).toBe(true);
   });
 });
 
