@@ -1370,6 +1370,7 @@ scripts/sandbox-browser-setup.sh   # optional browser image
         default: true,
         name: "Main Agent",
         workspace: "~/.openclaw/workspace",
+        workdir: "group-workdir", // relative to workspace; optional
         agentDir: "~/.openclaw/agents/main/agent",
         model: "anthropic/claude-opus-4-6", // or { primary, fallbacks }
         thinkingDefault: "high", // per-agent thinking level override
@@ -1398,6 +1399,7 @@ scripts/sandbox-browser-setup.sh   # optional browser image
           profile: "coding",
           allow: ["browser"],
           deny: ["canvas"],
+          fs: { workdirWriteOnly: true },
           elevated: { enabled: true },
         },
       },
@@ -1414,6 +1416,8 @@ scripts/sandbox-browser-setup.sh   # optional browser image
 - `reasoningDefault`: optional per-agent default reasoning visibility (`on | off | stream`). Applies when no per-message or session reasoning override is set.
 - `fastModeDefault`: optional per-agent default for fast mode (`true | false`). Applies when no per-message or session fast-mode override is set.
 - `runtime`: optional per-agent runtime descriptor. Use `type: "acp"` with `runtime.acp` defaults (`agent`, `backend`, `mode`, `cwd`) when the agent should default to ACP harness sessions.
+- `workdir`: optional per-agent working directory (must be inside `workspace`). Relative paths resolve against `workspace`. When set, `exec`/`write`/`edit`/`apply_patch` tools default to this path; `read` tools and bootstrap files still use `workspace`. Useful when multiple agents share the same workspace (personality/config) but work in different subdirectories.
+- `tools.fs.workdirWriteOnly`: when `true`, restricts `write`/`edit`/`apply_patch` to the `workdir` directory. Read tools are unaffected. Requires `workdir` to be set; falls back to workspace-level restriction when `workdir` is absent. Also settable globally at `tools.fs.workdirWriteOnly`.
 - `identity.avatar`: workspace-relative path, `http(s)` URL, or `data:` URI.
 - `identity` derives defaults: `ackReaction` from `emoji`, `mentionPatterns` from `name`/`emoji`.
 - `subagents.allowAgents`: allowlist of agent ids for `sessions_spawn` (`["*"]` = any; default: same agent only).

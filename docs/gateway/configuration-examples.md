@@ -643,6 +643,37 @@ terms before depending on subscription auth.
 }
 ```
 
+### Shared workspace with isolated workdir (group chat protection)
+
+Multiple agents share the same personality and config files but write to separate subdirectories. Useful for group chat agents that should not modify bootstrap files (AGENTS.md, SOUL.md, MEMORY.md).
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "dm-agent",
+        default: true,
+        workspace: "~/.openclaw/workspace",
+        // No workdir — full workspace access (DM agent)
+      },
+      {
+        id: "group-agent",
+        workspace: "~/.openclaw/workspace",  // same shared personality
+        workdir: "group-workdir",             // writes go here
+        tools: {
+          fs: { workdirWriteOnly: true },     // protect workspace files
+        },
+      },
+    ],
+  },
+}
+```
+
+- `group-agent` reads from the full workspace (AGENTS.md, SOUL.md, etc.) but can only write/edit inside `~/.openclaw/workspace/group-workdir/`.
+- `dm-agent` has full read/write access to workspace as usual.
+- `workdir` must be a subdirectory of `workspace` (relative paths resolve against it).
+
 ## Tips
 
 - If you set `dmPolicy: "open"`, the matching `allowFrom` list must include `"*"`.
