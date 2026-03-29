@@ -9,6 +9,7 @@ import {
   hasBinaryMock,
   runCommandWithTimeoutMock,
 } from "./skills-install.test-mocks.js";
+import { createCanonicalFixtureSkill } from "./skills.test-helpers.js";
 import { resolveSkillToolsRootDir } from "./skills/tools-dir.js";
 import type { SkillEntry, SkillInstallSpec } from "./skills/types.js";
 
@@ -54,11 +55,12 @@ const TAR_GZ_TRAVERSAL_BUFFER = Buffer.from(
 
 function buildEntry(name: string): SkillEntry {
   const skillDir = path.join(workspaceDir, "skills", name);
+  const filePath = path.join(skillDir, "SKILL.md");
   return {
     skill: createFixtureSkill({
       name,
       description: `${name} test skill`,
-      filePath: path.join(skillDir, "SKILL.md"),
+      filePath,
       baseDir: skillDir,
       source: "openclaw-workspace",
     }),
@@ -73,14 +75,7 @@ function createFixtureSkill(params: {
   baseDir: string;
   source: string;
 }): SkillEntry["skill"] {
-  return {
-    name: params.name,
-    description: params.description,
-    filePath: params.filePath,
-    baseDir: params.baseDir,
-    source: params.source,
-    disableModelInvocation: false,
-  };
+  return createCanonicalFixtureSkill(params);
 }
 
 function buildDownloadSpec(params: {
